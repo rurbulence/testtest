@@ -1,0 +1,302 @@
+\documentclass[a4paper,12pt]{article}
+\title{Fast Numerical Method for Oxygen Supply in Angiogenesis}
+\author{Yuankai Lu}   %作者的名称
+\usepackage{times}                       % 使用 Times New Roman 字体
+\usepackage{CJK,CJKnumb,CJKulem}         % 中文支持宏包
+\usepackage{color}                       % 支持彩色
+\usepackage{algorithm}
+\usepackage{verbatim}
+\usepackage{amstext}
+\usepackage{algorithmic}
+%——————————–其他宏包——————————–
+\usepackage{amsmath,amsthm,amsfonts,amssymb,bm} % 数学宏包
+\usepackage{graphicx,psfrag}                    % 图形宏包
+%\usepackage{makeidx}                            % 建立索引宏包
+%\usepackage{listings}                           % 源代码宏包
+\usepackage{cite}
+\usepackage{ctex}  %使用宏包(为了能够显示汉字)
+
+%———————————正文———————————–
+\begin{document}
+\maketitle
+\bibliographystyle{plain}
+\paragraph{abstract}
+
+\paragraph{Introduction}
+Oxygen, one of the most important material in human metabolism process. Delivering enough oxygen to all cells is the main task of microcirculation. The local partial pressure of oxygen ($P_{O2}$) in the tissue plays a critical role in many life processes, such as tumor growth, angiogenesis... Many previous work \cite{7_dewhirst2008cycling}shows the angiogenesis process depends on many growth factors, vascular endothelial growth factor (VEGF) .etc, which relate to the local hypoxia. Advanced experimental techniques such as two-photon phosphorescence lifetime microscopy were applied to measure  $P_{O2}$ in vivo\cite{24_lecoq2011simultaneous}. However. vivo experiment can hardly offer a complete picture of oxygen field on microscopic scales. Therefore,  developing a reasonable theoretic model and the corresponding numerical algorithm is necessary for studying local oxygen transport behavior in tissue. \\
+The classical Krogh cylinder model crudely describes the oxygen transport from blood vessels to tissues\cite{9_krogh1919number}: evenly spaced capillaries supply oxygen to a cylindrical region surrounding themselves. This model is an idealized approximation of the skeletal muscle case, where capillaries grow roughly parallel. Finer experimental results indicate the disorder of spatial distribution of blood vessels.\cite{10_cassot2006novel} In retinal vascular network, the capillaries grow radially from the center to the periphery\cite{16_causin2016blood}. And the microcirculation in tumor tissue present a chaotic geometry\cite{17_grimes2016estimating}. Angiogenesis process in such region depends on the disordered oxygen distribution, which need models with more real and complex network structure.\\
+The chaotic vessel geometry brings difficulty to model and numerical algorithm. There are several works based on krogh model with more details. Popel and Goldenman proposed two-dimensional and three-dimensional oxygen delivery models respectively\cite{8_popel1989theory}\cite{23_goldman2008theoretical}. The modified Krogh model gives a more reasonable oxygen consumption in tissue and oxygen convection in blood.\\
+The most common practice is to solve the corresponding partial differential equations with numerical finite difference method. Limited by a rectangular grid, there are strong requirements for the shape of blood vessels and tissues .For complex network structure, one approximate approach is to replace the $P_{O2}$ near the blood vessel with the tissue average $P_{O2}$ \cite{18_liu2009computational}, which underestimate the $P_{O2}$ surrounding vessel. Secomb and Hsu develop green function method to represent each vessel as oxygen source to avoid complex solution region\cite{20_secomb2004green}. This paper based on this idea and improve this method to make it suitable for multigrid algorithm.\\
+Capillary diameter is approximately 8 microns, which means that the numerical mesh density needs to reach this level. The Multigrid algorithm has unmatched numerical speed which allow us calculate a larger system\cite{25_ghia1982high}. The whole mice retina 10mm ,which means the numeric grid should have more than 1000 points in each dimension. This article provide a modification which can be generally applied on such nonlinear numerical PDE problems making them consistent with multigrid method.
+
+
+
+\subparagraph{diffusion in tissue}
+The transport of oxygen in tissue mostly depends on diffusion. The oxygen-consuming tissue is a mixture of cells, extracellular matrix and extracellular fluid. The diffusion rate of oxygen relies on tissue parts. Since the total oxygen diffusion area is millimeter level , the tissue can be regarded as a kind of homogeneous medium with uniform oxygen diffusivity D and solubility $\alpha$. The oxygen diffusion in tissue satisfied the reaction diffusion equation:
+\begin{eqnarray}
+           D \alpha \Delta PO_2=M(PO_2)
+\end{eqnarray}
+Here $PO_2$ represents the partial pressure of oxygen in tissue. $M$ means oxygen consuming rate in tissue. The process of consuming oxygen consists of many chemical and biological mechanisms. A general Michaelis–Menten dynamic is selected to describe the oxygen consuming process.
+\begin{eqnarray}
+           M(PO_2)=\frac{M_0 PO_2}{P0+PO_2}
+\end{eqnarray}
+where $M_0$ represents the oxygen demand and $P_0$ represents the $PO_2$ at half-maximal consumption.
+\subparagraph{convection oxygen flow in vessel}
+Oxygen transport in blood vessels is very different from tissue. In vessels, only a small fraction of oxygen is dissolved in the plasma $flux_{plasma}$ and most of them is binding on the hemoglobin $flux_{Hb}$. The relation between oxygen saturation $S$ and partial pressure of oxygen $P_b$ in the blood satisfies the Oxygen–hemoglobin dissociation curve, $S(P_b)=P_b^n/(P_b^n+P_{50}^n)$. The two  parts respectively satisfy:
+\begin{eqnarray}
+% \nonumber to remove numbering (before each equation)
+  &&flux_{plasma}=Q\alpha_{eff} P_b\\
+  &&flux_{Hb}=QH_DC_0S(P_b)
+\end{eqnarray}
+where $H_D$ is the discharge hematocrit,$S$ is the oxygen-hemoglobin saturation, $P_b$ is the blood oxygen partition pressure, $C_0$ is the concentration of hemoglobin-bound oxygen in a fully saturated red blood cell and $\alpha_{eff}$ is the effective solubility of oxygen in blood.
+Thus the total oxygen flow in blood vessels can be described as:
+\begin{eqnarray}
+% \nonumber to remove numbering (before each equation)
+  f(P_b)&=&flux_{Hb}+flux_{plasma}\\
+        &=&Q(H_DC_0S(P_b)+\alpha_{eff} P_b)
+\end{eqnarray}
+\subparagraph{oxygen exchange between blood and tissue}
+At the interface between blood and tissue, the oxygen flux across the blood vessel wall must be consistent with the diffusive oxygen field in tissue. Suppose the blood vessel is a cylinder with radius r, so that the total oxygen flux q through the blood vessel wall per unit length must satisfy:
+\begin{eqnarray}
+% \nonumber to remove numbering (before each equation)
+  q(\gamma)&=& -D\alpha\int_0 ^{2\pi} \frac{\partial PO_2}{\partial r} r d\theta
+\end{eqnarray}
+where $\gamma$ is the coordinate along the vessel direction. We integral along the whole circumference ($0$ to $2\pi$) to get the total flux per unit length. And conservation of oxygen implies :
+\begin{eqnarray}
+% \nonumber to remove numbering (before each equation)
+  \frac{d f(P_b)}{d\gamma}=-q(\gamma)
+\end{eqnarray}
+\paragraph{pre treatment}
+A complete and regular solution area has great benefits for meshing and numerical simulation. The oxygen from the blood vessels to the tissue is the only source of oxygen for the tissue. Instead of treating vessel wall oxygen flux as a boundary condition of tissue, we prefer to turn it into source term. Considering that the radius of the blood vessel is relatively small compare to the distance between the blood vessels, we can replace the source on the vessel wall with the source on the axis of the vessel.
+\begin{eqnarray}
+% \nonumber to remove numbering (before each equation)
+ D \alpha \Delta PO_2 -M(PO_2)+S&=&0 \\
+ S&=&q\delta (x-\text{vessel axis})
+\end{eqnarray}
+  \begin{figure}[htbp]
+  \centering
+  \begin{minipage}{6cm}
+     \includegraphics[width=6cm]{vessel_wall_source_diagram.eps}
+     \centerline{(a)}
+  \end{minipage}
+  \begin{minipage}{6cm}
+     \includegraphics[width=6cm]{vessel_axis_source_diagram.eps}
+     \centerline{(b)}
+  \end{minipage}
+  \caption{(a) real case:the oxygen flux through blood vessel wall (b) simplify case: oxygen flux from centerline of vessel}\label{fig}
+\end{figure}
+\paragraph{convergence of iteration}
+What we are looking for is a solution to such a nonlinear system.
+\begin{eqnarray}
+% \nonumber to remove numbering (before each equation)
+  D \alpha \Delta PO_2 &-&M(PO_2)+S=0 \\
+  \frac{d f(P_b)}{d\gamma} &=& -q(\gamma) \\
+  Pb(0) &=& Pb_0\\
+  Pb|_{vessel wall}&=&PO2|_{vessel wall}
+\end{eqnarray}
+%frac{\partial PO_2}{\partial t} &=& D \alpha \Delta PO_2 -M(PO_2)+S \\
+The nonlinear system requires some iteration method to solve numerically. The general iterative approach does not guarantee convergence for this complex system. So we propose our iterative method based on the real physical process and multi time scale analysis. The coupled system can separated into two subsystems: the diffusion of oxygen in tissue is slow process, the convection of oxygen flow in vessel is fast process. The sub-systems are then analyzed semi-independently.
+
+In the initial state $t=0$, suppose $PO_2=0$ everywhere and $Pb(\gamma)=Pb_0$, this means no oxygen passes through the vessel wall. When $t>0$, Oxygen begins to diffuse into the tissue from the blood vessels. At any $t=T>0$, the rate of oxygen diffusion $S$ through vessel wall depends on the current surrounding $PO_2$ and the $P_b$ in the blood vessels, which satisfied the darcy's law. We can use a linear form to express $q$ as:
+\begin{eqnarray}
+                                   % \nonumber to remove numbering (before each equation)
+q(\gamma) &=& L(P_b,PO_2)
+\end{eqnarray}
+The process of oxygen convection in blood vessels is a fast process. And the oxygen balance in vessel should satisfied the ode alone the vessel:
+\begin{eqnarray}
+% \nonumber to remove numbering (before each equation)
+  \frac{d f(P_b)}{d\gamma}&=&-q(\gamma) \\
+                          &=&-L(P_b,PO_2)\\
+  P_b(0) &=& Pb_0
+\end{eqnarray}
+The ode gives us the $q$ and $P_b$ for time $T$.
+
+
+There are $qdt$ oxygen flow into the tissue in the time interval $[T,T+dt]$. Then the dynamic in tissue can be described by the reaction diffusion equation:
+\begin{eqnarray}
+% \nonumber to remove numbering (before each equation)
+  \frac{\partial PO_2}{\partial t} &=& D \alpha \Delta PO_2 -M(PO_2)+S
+\end{eqnarray}
+The tissue $PO_2$ for $T+dt$ is updated by solving the equation.
+
+With the new surrounding tissue $PO_2$ in $T+dt$, The $P_b$ and $q$ for $T+dt$ can be updated by the ode above.
+
+After a long enough time, every variable in the system is becoming steady so that we can get a numerical solution to this problem. The discrete scheme of the numerical method can be written as:
+\begin{eqnarray}
+% \nonumber to remove numbering (before each equation)
+   &\frac{1}{\Delta t}(PO_2^{n+1}-PO_2^n) =\frac{D}{\Delta x^2}\alpha \Delta PO_2^{n+1} -M(PO_2^{n+1})+S(PO_2^{n}) \\
+   &A PO_2^{n+1}=B PO_2^{n}\\
+   &A=\frac{1}{\Delta t}I- \frac{D}{\Delta x^2}\alpha \Delta +M  \\
+   &B=\frac{1}{\Delta t}I + S
+\end{eqnarray}
+As we know, the higher the partial pressure of oxygen $PO_2$ in the tissue,  the less oxygen flows into the tissue from the vessel wall $S$. So the eigenvalue of the operator $S$ should be negative. On the other hand, $M(PO_2)$ increases with $PO_2$, which means that the eigenvalue of M is positive. We can adjust $\Delta t$ and $\Delta x$ to make the spectral radius of A bigger than B, which ensured the convergence.
+
+\paragraph{solve the pde}
+For the consideration of computational cost, we use 4 points discrete scheme on regular grid. Here we define S at the axis of blood vessel. The discrete source $S_k$ are also located at the axis and discrete by interval $\Delta \tau$ which depends on the accuracy of numerical method. For each single discrete source $S_k$, we use peskin's interpolation method to interpolation the delta source function on nearby grid point. Suppose the coordinate of $S_k$ is $x_s,y_s$
+The modify source of $S_k$ satisfied:
+\begin{eqnarray}
+% \nonumber to remove numbering (before each equation)
+  S_{ij} &=& S_k\frac{1}{h^2}\phi(\frac{x_s}{h}-i)\phi(\frac{y_s}{h}-j)
+\end{eqnarray}
+here the one variable function $\phi(r)$ has some constriction:
+$\phi(r)$ is continuous for all real r, \\
+$\phi(r)=0$ for $|r|>2$ \\
+$\sum_{j\quad even}\phi (r-j)=\sum_{j\quad odd}\phi (r-j)=\frac{1}{2} $ for all real r\\
+$\sum_j (r-j)\phi (r-j)=0$ for all real r\\
+$\sum_j (\phi(r-j))^2=c$ for all real r\\
+The explict form of $\phi$
+\begin{eqnarray}
+% \nonumber to remove numbering (before each equation)
+  \phi(r) &=& 0,r\leq -2 \\
+   &=& \frac{1}{8}(5+2r-\sqrt{-7-12r-4r^2}), -2\leq r \leq -1\\
+   &=& \frac{1}{8}(3+2r-\sqrt{1-4r-4r^2}), -1\leq r \leq 0 \\
+   &=& \frac{1}{8}(3-2r-\sqrt{1+4r-4r^2}), 0\leq r \leq 1 \\
+   &=& \frac{1}{8}(5-2r-\sqrt{-7+12r-4r^2}), 1\leq r \leq 2\\
+   &=& 0,r\geq 2
+\end{eqnarray}
+\begin{figure}
+  \centering
+  % Requires \usepackage{graphicx}
+  \includegraphics[width=10cm]{2d_peskin_interpolation.eps}\\
+  \caption{the interpolation value on integer grid point}\label{2d_peskin_interpolation}
+\end{figure}
+
+The discrete scheme of the equation:
+\begin{eqnarray}
+% \nonumber to remove numbering (before each equation)
+  \frac{\partial P}{\partial t} = D \alpha \Delta P -M(P)+S\\
+  S=q\delta (x-vessel axis)
+\end{eqnarray}
+is:
+\begin{eqnarray}
+% \nonumber to remove numbering (before each equation)
+  \frac{1}{\Delta t}(P_{i,j}^{k+1}-P_{i,j}^k) = \frac{D}{\Delta x^2}(P_{i+1,j}^{k+1}+P_{i,j+1}^{k+1}+P_{i-1,j}^{k+1}+P_{i,j-1}^{k+1}-4P_{i,j}^{k+1})- M(P_{i,j})+S_{i,j}
+\end{eqnarray}
+We use the multigrid method to solve this discrete scheme.
+
+
+
+\subparagraph{modify solution}
+here we choose a single delta source as an example, the origin equation with solution P:
+\begin{eqnarray}
+% \nonumber to remove numbering (before each equation)
+  \frac{\partial P}{\partial t} = D \Delta P -M(P)+\delta(x)
+\end{eqnarray}
+modified source equation with modified solution $\tilde{P}$:
+\begin{eqnarray}
+% \nonumber to remove numbering (before each equation)
+  \frac{\partial \tilde{P}}{\partial t} = D  \Delta \tilde{P} -M(\tilde{P})+\tilde{\delta}(x)
+\end{eqnarray}
+The modify solution $\delta P$ satisfied:
+\begin{eqnarray}
+% \nonumber to remove numbering (before each equation)
+    \frac{\partial \delta P}{\partial t} = D  \Delta \delta P -(M(\tilde{P}+\delta P)-M(\tilde{P})+\delta(x)-\tilde{\delta}(x)
+\end{eqnarray}
+  \begin{figure}[htbp]
+  \centering
+  \begin{minipage}{6cm}
+     \includegraphics[width=6cm]{solution_difference_far.eps}
+     \centerline{(a)}
+  \end{minipage}
+  \begin{minipage}{6cm}
+     \includegraphics[width=6cm]{solution_difference_nearby.eps}
+     \centerline{(b)}
+  \end{minipage}
+  \caption{(a) The difference of P and $\tilde{P}$ for general version (b) The difference of P and $\tilde{P}$ for nearby version}\label{solution difference}
+\end{figure}
+The sum and the barycenter(center of gravity) of the $\tilde{\delta}(x)$ are the same as $\delta(x)$, which makes the $\delta p$ negligible far away from source.
+
+ In addition, the oxygen partial pressure is relatively high near the source, which makes the $M(P)$ term can be approximated as a constant. So that we can solve $\delta P$ at a small area:
+\begin{eqnarray}
+% \nonumber to remove numbering (before each equation)
+  D\Delta \delta P &=&  \delta(x)-\tilde{\delta}(x)\\
+  \delta P|_{\partial \Omega_{small}}&=& 0
+  \end{eqnarray}
+  by linearity, the equation can be separate as two parts:
+  \begin{eqnarray}
+  D\Delta \delta P_1 =  \delta(x) &\quad &D\Delta \delta P_2 = \tilde{\delta}(x)\\
+  \delta P_1|_{\partial \Omega_{small}}= g &\quad &  \delta P_2|_{\partial \Omega_{small}}= g
+\end{eqnarray}
+Here we choose 8*8 square grid as $\Omega_{small}$. (give a figure) We use green function method to give an explicit form of $\delta P_1$ and  derive the numerical solution of $\delta P_2$ by solve the 8*8 dimension linear system. In summary , the modified solution term $\delta P=\delta P_1+\delta P_1$ can be derived with relatively  low compute cost.
+
+\paragraph{solve the dynamic system along vessel}
+\begin{eqnarray}
+% \nonumber to remove numbering (before each equation)
+  \frac{d f(P_b)}{d\gamma}&=&-q(\gamma) \\
+                          &=&L(P_b,PO_2)\\
+  P_b(0) &=& Pb_0
+\end{eqnarray}
+
+Express the explicit discrete form of $L$ is the essential part of the numerical method.\\
+\begin{figure}
+  \centering
+  % Requires \usepackage{graphicx}
+  \includegraphics[width=10cm]{pb_po2_diagram.eps}\\
+  \caption{several nearby tissue points}\label{pb_po2}
+\end{figure}
+The first order expansion of oxygen field near blood vessel wall:
+\begin{eqnarray}
+% \nonumber to remove numbering (before each equation)
+  PO_2(x,y) &=& P_b+a*x+b*y
+\end{eqnarray}
+ We use a few nearest data points for the least squares fit to get the parameter a,b. The oxygen diffusion rate through vessel wall is just $b/D$. Note that this dynamic system is along  one single blood vessel. At vascular bifurcation, the oxygen partial pressure will experience a discontinuity change, and the $P_b$ of the daughter blood vessels needs to be obtained by the weighted average of the $P_b$ of paternal blood vessels.
+ \paragraph{result}
+ We use this algorithm to simulate the oxygen field in retina system. The first case \ref{po2_field} represent a simple artificial network.
+
+  \begin{figure}[htbp]
+  \centering
+  \begin{minipage}{6cm}
+     \includegraphics[width=6cm]{2d_po2.eps}
+     \centerline{(a)}
+  \end{minipage}
+  \begin{minipage}{6cm}
+     \includegraphics[width=6cm]{3d_po2.eps}
+     \centerline{(b)}
+  \end{minipage}
+  \caption{The tissue oxygen field in 2d and 3d version, 2048*2048 grid}\label{po2_field}
+\end{figure}
+We use this simple case to show the converge rate of the algorithm \ref{error_order} .This algorithm has near one order accuracy , which restricted by the flux compute. The error of the oxygen field is roughly less than $0.4$ mmhg in 1024*1024 grid, which is enough small for our analysis.
+
+  \begin{figure}[htbp]
+  \centering
+  \begin{minipage}{6cm}
+     \includegraphics[width=6cm]{error_order.eps}
+     \centerline{(a)}
+  \end{minipage}
+  \begin{minipage}{6cm}
+     \includegraphics[width=6cm]{error_order_log.eps}
+     \centerline{(b)}
+  \end{minipage}
+  \caption{The accuracy of algorithm}\label{error_order}
+\end{figure}
+The oxygen flowing out of the vessel wall is larger in the peripheral region than in the central region, because of the relatively low oxygen partial pressure of the tissue in the peripheral. At the vascular bifurcation, there is some discontinuity in the oxygen flux. This singularity is due to the edge effect caused by the special geometry of the vessel bifurcation. This effect will cause some errors in the oxygen field at the bifurcation, but the effect on the global oxygen field is small.
+  \begin{figure}[htbp]
+  \centering
+  \begin{minipage}{6cm}
+     \includegraphics[width=6cm]{special_pb.eps}
+     \centerline{(a)}
+  \end{minipage}
+  \begin{minipage}{6cm}
+     \includegraphics[width=6cm]{special_q.eps}
+     \centerline{(b)}
+  \end{minipage}
+  \caption{(a)Blood oxygen partial $P_b$(b)Oxygen flux through vessel wall q}\label{special_qpb}
+\end{figure}
+
+The algorithm can also apply to a more complex, more real case. \ref{real_case} ,the network geometry are a part of the real mouse retina. The algorithm also valid to this complex case.
+  \begin{figure}[htbp]
+  \centering
+  \begin{minipage}{6cm}
+     \includegraphics[width=6cm]{real_case.eps}
+     \centerline{(a)}
+  \end{minipage}
+  \begin{minipage}{6cm}
+     \includegraphics[width=6cm]{real_geo.eps}
+     \centerline{(b)}
+  \end{minipage}
+  \caption{(a)Oxygen field $PO_2$(b) part of a real mouse retina}\label{real_case}
+\end{figure}
+\paragraph{discuss}
+Our algorithm is able to solve a problem with complex geometric features on a regular grid. This allows us to solve this problem at a lower computational cost. It also gives hints for a convergence iterative method for such nonlinear problems. At this simulated scale 4096*4096, we can simulate the retina of some small animals in a finer way. The whole retina of a baby mouse are 1mm*1mm. Our mesh density is almost 5 microns, thinner than the finest capillaries, so that we can easily simulate the behavior of angiogenesis.
+\bibliography{agref}
+\end{document}
